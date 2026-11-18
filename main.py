@@ -165,6 +165,13 @@ admin_router = APIRouter(
 def get_users(session: SessionDep, user: current_user):
     return session.exec(select(User)).all()
 
+@admin_router.delete('/users/{id}', status_code=status.HTTP_204_NO_CONTENT)
+def delete_user(session: SessionDep, id: int):
+    user_to_delete = session.get(User, id)
+    if not user_to_delete:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    session.delete(user_to_delete)
+    session.commit()
 
 
 app.include_router(admin_router)
