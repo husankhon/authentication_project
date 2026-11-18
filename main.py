@@ -1,7 +1,7 @@
 from database import SessionDep
 from contextlib import asynccontextmanager
-from typing import Annotated
-from fastapi import FastAPI, status, HTTPException, Depends, Body
+from typing import Annotated, Literal
+from fastapi import FastAPI, status, HTTPException, Depends, Body, APIRouter
 from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from database import create_db_and_tables
 from models import UserResponse, User, UserCreate, UserUpdate
@@ -9,6 +9,16 @@ from security import hash_password, verify_password, DUMMY_HASH, create_access_t
 from sqlmodel import select
 from settings import settings
 
+role = Literal['user', 'admin']
+
+class RoleRequired():
+    def __init__(self, roles: role):
+        self.roles = roles
+    
+    def __call__(self, session: SessionDep, user: current_user):
+        if user.role not in self.roles:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have permission to perform this action")
+        return user
 
 oauth2_schema = OAuth2PasswordBearer(tokenUrl="token")
 
@@ -145,4 +155,16 @@ def update_me(session: SessionDep, user: current_user, updated_user: UserUpdate)
     session.refresh(user)
     return user
     
-    
+admin_router = APIRouter(
+    prefix="/admin",
+    tags=["admin"],
+    dependencies=[Depends(RoleRequired(["admin"]))],
+)
+
+@admin_router.get('/users', status_code=status.HTTP_200_OK, response_model=list[UserResponse])
+def get_users(session: SessionDep, user: current_user):
+    return session.exec(select(User)).all()
+
+
+
+app.include_router(admin_router)
